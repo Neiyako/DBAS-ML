@@ -1,331 +1,188 @@
 # CloudWater ML Platform v2.0
 
-> 云水资源科研机器学习平台：CLWC / CIWC 反演、CWP 预测、时空场重建、仿真-真实数据融合训练。
->
-> 面向大气科学与云水资源综合评价的科研实验平台：从**数据**（TB 级 ERA5 NetCDF）到
-> **GPU 训练**（CUDA / RTX 50 系）到**可复现实验管理**，一条链路走通。
+**云水资源科研机器学习平台** — 从 TB 级 ERA5 NetCDF 到 GPU 训练、物理约束、可复现实验管理的完整链路。
+
+![tests](https://img.shields.io/badge/tests-303%20passed-brightgreen)
+![python](https://img.shields.io/badge/python-3.11%2B-blue)
+![pytorch](https://img.shields.io/badge/PyTorch-2.2%2B-ee4c2c)
+![license](https://img.shields.io/badge/license-MIT-green)
+![docs](https://img.shields.io/badge/docs-15%20guides-informational)
+
+面向大气科学 / 云水资源综合评价：**CLWC / CIWC 反演**、**CWP 预测**、**时空场重建**、
+**仿真-真实数据融合训练**，以及可复现的实验管理与物理一致性验证。
 
 ```text
-数据生成/接入 → Dataset → DataLoader → Model → Loss(+物理约束) → Backprop
+数据接入 → Dataset → DataLoader → Model → Loss(+物理约束) → Backprop
    → Validation → Checkpoint → Metrics → Uncertainty → Visualization → Experiment Record
 ```
 
 ---
 
-## 1. 三十秒上手
+## 为什么需要它
+
+云水含量反演是典型的**小样本 + 强物理约束 + 时空自相关**的科研问题。常见的坑：
+
+| 坑 | 本平台的做法 |
+|---|---|
+| 随机划分让相邻网格/相邻时刻泄漏到测试集 | 时间/年份/区域/来源划分 + **场景分组**防同源泄漏 |
+| 归一化用了全集统计量 → 隐性泄漏 | 统计量**只在训练集拟合**，并记录拟合证据（可校验） |
+| 把 `kg kg⁻¹` 当 `kg m⁻³` 积分 → CWP 高估 1.2 倍 | 单位感知的柱积分公式，**口径不符直接报错** |
+| 预测出负的云水含量 | 可选 softplus 输出头做**非负硬约束**（训练/推理一致） |
+| 把预测误差当置信区间 | 分割共形区间（有覆盖率保证）+ CRPS，**无保证的方法显式标注** |
+| 实验无法复现 | 记录 git commit、数据指纹、随机流、依赖版本、运行时计划 |
+| 续训后曲线断裂、学习率重启 | 检查点保存 scheduler/scaler/**RNG**/历史/早停状态 |
+
+---
+
+## 特性
+
+| 能力 | 说明 |
+|---|---|
+| **GPU 训练引擎** | CUDA / MPS / CPU 自动探测；AMP（fp32/fp16/bf16 + GradScaler）；梯度累积（含尾部 flush）；梯度裁剪；channels_last；torch.compile；梯度检查点；峰值显存记录；OOM 捕获与建议 |
+| **大规模数据** | NetCDF 按时间/空间/气压层/变量**按需读取**；分块与**流式训练**；分级缓存（版本化、可失效、可清理、**永不写 data/raw**）；不默认整载入内存 |
+| **质量与溯源** | NaN/Inf、异常值、经纬度、时间连续性、气压层、单位、缺测分布；每样本 `source/source_origin/dataset/scene_id`；数据文件指纹 |
+| **模型生态** | MLP · RandomForest · LightGBM · XGBoost · CNN · U-Net · ConvLSTM · MultiTask（8/8 已实现并注册） |
+| **物理约束** | 可插拔接口、单位感知、硬/软分离、逐分量记录；非负约束可用；CWP 积分/水量守恒/廓线结构/水循环为**预留**（构造即抛，不伪装） |
+| **不确定性** | 分割共形区间（覆盖率保证）+ CRPS + 覆盖率/宽度/CWC |
+| **实验管理** | 生命周期状态机（CREATED→…→COMPLETED/FAILED/INTERRUPTED）、唯一实验 ID、**拒绝覆盖**、断点续训、结果对比 |
+| **性能基准** | 吞吐、数据/传输/计算三段耗时、峰值显存；按**实测硬件**给配置建议（不写死型号） |
+
+---
+
+## 快速开始
 
 ```bash
+git clone <your-repo-url> && cd DBAS-ML
+python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cloudwater doctor                       # 环境体检（依赖/设备/目录/模型）
+
+cloudwater doctor                                     # 环境体检
 cloudwater train --config configs/experiments/mlp_baseline.yaml
 cloudwater report --experiment experiment_001
 ```
 
-> 本仓库自带**合成**测试数据（`data/synthetic/cloudwater_synth.npz`），用于跑通工程链路。
-> 合成数据 `source` 恒为 `simulated`，**不得当作真实观测使用**。
-> 仓库历史产物 `outputs/experiment_001..003` 是基于该合成数据的基线运行（见 `outputs/*/metrics.json`）。
+仓库自带**合成**测试数据（`source=simulated`，仅用于跑通工程链路，**不得当作观测**）。
 
----
-
-## 2. 安装
+### GPU 环境
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"            # 开发：pytest / ruff / mypy / lightgbm / pyarrow
-pip install -e ".[lgbm,parquet]"   # 按需追加
-pip install -e ".[dask]"           # TB 级 NetCDF 分块读取（可选）
-```
-
-| 可选组 | 内容 | 什么时候需要 |
-|---|---|---|
-| `lgbm` | LightGBM | 树模型基线 |
-| `xgboost` | XGBoost | 树模型基线 |
-| `parquet` | pyarrow | Parquet 数据源 |
-| `dask` | dask | TB 级 NetCDF 分块/惰性读取 |
-| `dev` | pytest / ruff / mypy | 开发与 CI |
-
-> **macOS / iCloud 提示（已实测）**：放在 iCloud 同步目录（如 `Desktop`）里的项目，
-> iCloud 会反复把 `.venv/lib/*/site-packages/*.pth` 打上 `hidden` 标志，
-> Python 的 `site` 模块会跳过 hidden 的 `.pth` → `cloudwater` 控制台脚本报
-> `ModuleNotFoundError: No module named 'cloudwater_ml'`。
->
-> 三种解法（任选其一）：
-> 1. **推荐**：用仓库自带启动器 `./scripts/cloudwater ...`（不依赖 `.pth`）；
-> 2. `PYTHONPATH=src cloudwater ...`；
-> 3. 临时清标志 `chflags nohidden .venv/lib/python3.13/site-packages/*.pth`
->    （iCloud 可能会再次设置，属环境问题）。
->
-> pytest 不受影响（`pyproject.toml` 已设 `pythonpath = ["src"]`）。
-
----
-
-## 3. CUDA 环境配置
-
-| 显卡 | 需要的 PyTorch 构建 |
-|---|---|
-| RTX 50 系（Blackwell, sm_120） | **cu128**（`torch.version.cuda >= 12.8`） |
-| RTX 30/40 系 | cu118 / cu121 |
-| Apple Silicon | 默认 CPU / MPS |
-
-```bash
+# RTX 50 系（Blackwell, sm_120）需要 cu128 构建
 pip install torch --index-url https://download.pytorch.org/whl/cu128
-cloudwater gpu info      # 确认 CUDA 可用、型号、算力、显存
+cloudwater gpu info
+python scripts/gpu_acceptance.py --json outputs/gpu_acceptance.json   # 一键验收
 ```
-
-平台**不写死**任何显卡型号或显存容量：一切以 `cloudwater gpu info` 的**实测值**为准。
-详见 [`docs/gpu_training.md`](docs/gpu_training.md)。
 
 ---
 
-## 4. GPU / 设备检测
+## 常用命令
 
 ```bash
-cloudwater gpu info          # 人类可读
-cloudwater gpu info --json   # 结构化
-cloudwater doctor            # 依赖 + 设备 + 目录 + 已注册模型
+cloudwater doctor                     # 依赖/设备/目录/模型体检
+cloudwater gpu info                   # GPU/CUDA/MPS 详情
+cloudwater gpu benchmark              # 吞吐 + 瓶颈 + 峰值显存 + 配置建议
+cloudwater models list                # 模型注册表（状态随代码自动更新）
+cloudwater inspect  -c configs/data.yaml        # 数据结构（只读）
+cloudwater data validate -c configs/data.yaml   # 数据质量报告
+cloudwater cache info | cache clear   # 缓存运维（可清理/可重建）
+cloudwater train    -c configs/experiments/mlp_baseline.yaml
+cloudwater resume   -e experiment_001           # 断点续训（新建实验，不覆盖）
+cloudwater evaluate -e experiment_001
+cloudwater compare  -e exp1 exp2
+cloudwater report   -e experiment_001 | report   # 单实验 / 全部对比
 ```
-
-自动检测项：GPU 名称、CUDA 版本、PyTorch CUDA 构建、可用/总显存、计算能力、
-多卡数量、MPS 可用性、cuDNN 版本。**CUDA 不可用时给出明确原因并回退 CPU**（不静默）。
 
 ---
 
-## 5. 数据接入
+## 数学规格
 
-### 5.1 支持的格式
+所有模型、损失、指标、约束、不确定性方法的公式与**代码位置对照**见
+**[`docs/formulation.md`](docs/formulation.md)**。核心几条：
 
-| 适配器 | 适用 | 说明 |
-|---|---|---|
-| `npz` / `csv` / `parquet` | 中小规模表格 | parquet 走**列投影**读取 |
-| `netcdf` | ERA5 等 | 按时间/空间/气压层/变量**按需读取**，可分块、可流式 |
+- **CWP 柱积分**（口径 A，CLWC 为 kg kg⁻¹）：
 
-### 5.2 NetCDF 按需读取
+  $$\mathrm{CWP}=\int_{z_b}^{z_t}\rho_{\text{air}}(z)\,\mathrm{CLWC}(z)\,\mathrm{d}z\approx\sum_k\rho_k\,\mathrm{CLWC}_k\,\Delta z_k$$
 
-```yaml
-data:
-  adapter: netcdf
-  path: /data/era5/era5_2015.nc
-  features: [t, q, rh, u, v, w]
-  targets: [clwc, ciwc]
-  netcdf:
-    time_range: ["2015-01-01", "2015-12-31"]
-    latitude_range: [20.0, 50.0]
-    longitude_range: [90.0, 130.0]
-    level_range: [500.0, 900.0]
-    chunks: { time: 16 }
+  若 CLWC 已是 kg m⁻³ 则**不能再乘 $\rho$**（平台会报错拦截）。
+
+- **组合损失**：$\mathcal{L}_{\text{total}}=\mathcal{L}_{\text{data}}+\sum_i\lambda_i\mathcal{L}_{\text{phys},i}$，物理项作用在**物理单位**上。
+
+- **梯度累积尾部修正**：当 $N_b\bmod A=P\ne0$ 时，尾部梯度按 $A/P$ 修正后再更新，避免样本被静默丢弃。
+
+- **共形区间**：$q=Q_{1-\alpha}(|y-\hat y|_{\text{calib}})$，$P(Y\in[\hat y-q,\hat y+q])\ge 1-\alpha-\frac{1}{|\mathcal{C}|+1}$。
+
+---
+
+## 项目结构
+
+```
+src/cloudwater_ml/
+├── hardware/     设备探测 · 精度策略(AMP) · 显存监控 · 性能剖析
+├── training/     Trainer(AMP/累积/裁剪/检查点) · RuntimePlan · 损失 · 调度
+├── data/         适配器(netcdf/array) · 流式 · 分级缓存 · 质量 · 划分 · 真仿融合
+├── models/       base(契约+注册表) · mlp/rf/lgbm/xgb · cnn/unet/convlstm/multitask
+├── physics/      约束接口 · 单位 · 柱积分 · 校验器(四态) · 兼容桥
+├── evaluation/   指标(MAE/MSE/RMSE/R²/NSE/Pearson) · 泛化 · 鲁棒性 · 不确定性
+├── experiments/  生命周期状态机 · 溯源(git/数据指纹) · 编排 · 产物
+├── benchmark/    吞吐/瓶颈/显存 + 配置建议
+└── utils/        配置校验 · 异常体系 · 结构化日志 · 可复现
+
+configs/   实验配置（experiments/*.yaml 可直接运行）
+docs/      15 篇文档（架构/审计/公式/GPU/数据/模型/物理/实验/基准/复现/部署…）
+scripts/   gpu_acceptance.py · cloudwater 启动器 · 数据检查
+tests/     303 passed / 6 skipped（CUDA 与未装依赖自动跳过）
 ```
 
-- **不会默认把整个数据集载入 RAM**；
-- 体积守卫会在读取前拦截，并给出**真正有效**的降级建议；
-- 缓存分级（文件元数据 / 预处理结果 / 索引 / 内存），**可失效、可重建、可追溯**，
-  且**永不写入 `data/raw/`**。
+---
 
-### 5.3 数据质量与溯源
+## 复现性
+
+每次实验落盘：`experiment_id`、**git commit（含 dirty 标记）**、**数据文件指纹**
+（size/mtime/sha256 片段）、展开配置快照、随机种子、依赖版本、GPU/CUDA/PyTorch 版本、
+**运行时计划**、耗时、**峰值显存**、全部指标与损失分量。
 
 ```bash
-cloudwater inspect --config configs/data.yaml        # 结构/变量/维度/单位（只读）
-cloudwater data validate --config configs/data.yaml   # 质量报告
+cloudwater report --experiment experiment_001     # 看溯源与指标
 ```
 
-检查项：NaN/Inf、异常值、变量范围、经纬度、时间连续性、单位、维度、缺测分布。
-**报告优先**：未经配置不修改任何原始科研数据。
-
-详见 [`docs/data_engine.md`](docs/data_engine.md)。
+> GPU 非确定性算子（原子加、部分卷积反向）**不保证位级一致**；平台承诺「同种子 + 同数据 +
+> 同配置 + 同环境 ⇒ 统计一致」，详见 [`docs/reproducibility.md`](docs/reproducibility.md)。
 
 ---
 
-## 6. 模型训练
+## 当前状态与边界（诚实声明）
 
-### 6.1 已注册模型
-
-```bash
-cloudwater models list     # 从注册表读取，状态不会过期
-```
-
-| 模型 | 类型 | 输入契约 |
-|---|---|---|
-| `mlp` | 深度学习 | `[B, F]` → `[B, T]` |
-| `random_forest` | 传统 ML | `[B, F]` → `[B, T]` |
-| `lightgbm` | 传统 ML | `[B, F]` → `[B, T]` |
-| `cnn` | 深度学习 | `[B, C, H, W]` → `[B, T]` |
-| `unet` | 深度学习 | `[B, C, H, W]` → `[B, out, H, W]` |
-| `convlstm` | 深度学习 | `[B, T, C, H, W]` → `[B, T_out, C_out, H, W]` |
-| `multitask` | 深度学习 | 共享骨干 + 逐任务头（逐任务损失权重） |
-| `xgboost` | 传统 ML | `[B, F]` → `[B, T]` |
-
-### 6.2 训练配置
-
-```yaml
-training:
-  epochs: 100
-  batch_size: 256
-  learning_rate: 0.001
-  optimizer: adamw
-  loss: mse
-  scheduler: cosine
-  gradient_accumulation_steps: 1   # 等效 batch = batch_size × 本值
-  gradient_clip_norm: 1.0
-  seed: 42
-  early_stopping: { enabled: true, patience: 15 }
-
-hardware:
-  device: auto          # auto | cpu | cuda | mps
-  precision: auto       # auto | fp32 | fp16 | bf16
-  channels_last: auto   # 只对 4D 卷积模型自动启用
-  compile: false
-  grad_checkpointing: false
-
-dataloader:
-  num_workers: auto
-  pin_memory: true
-  persistent_workers: true
-  prefetch_factor: 2
-```
-
-能力：混合精度（AMP + GradScaler）、梯度累积（含尾部 flush）、梯度裁剪、
-channels_last、torch.compile、梯度检查点、显存峰值统计、OOM 捕获、
-数据/传输/计算三段耗时剖析、逐损失分量记录。
-
-### 6.3 物理约束
-
-```yaml
-physics:
-  constraints: [nonnegativity]
-  nonnegativity_weight: 0.1
-```
-
-物理约束**作用在物理单位上**（不是 z-score）；单位口径未定的约束（如
-CWP 柱积分一致性）在实现前**构造即报错**，不会把未验证的物理假设写进损失。
-详见 [`docs/physics_constraints.md`](docs/physics_constraints.md)。
-
----
-
-## 7. 模型扩展
-
-新增模型三步：
-
-```python
-# src/cloudwater_ml/models/my_model.py
-from .base import BaseModel, TrainingResult, register_model
-
-@register_model("my_model", kind="深度学习")
-class MyModel(BaseModel):
-    is_torch = True
-
-    def fit(self, X, Y, *, X_val=None, Y_val=None, config=None, out_dir=None):
-        ...
-    def predict(self, X) -> np.ndarray:      # 必须返回 [n_samples, n_targets]
-        ...
-    def _save_weights(self, path): ...
-    @classmethod
-    def _load_from(cls, path, meta): ...
-```
-
-```python
-# src/cloudwater_ml/models/__init__.py
-register_lazy_model("my_model", "cloudwater_ml.models.my_model")
-```
-
-契约：**不依赖 CLI / 实验运行器**；`predict` 恒返回 `[n_samples, n_targets]`；
-每个模型独立文件。详见 [`docs/model_registry.md`](docs/model_registry.md)。
-
----
-
-## 8. 实验复现
-
-每次实验自动记录：git commit（+dirty 标记）、数据文件指纹、展开配置、
-随机种子、依赖版本、GPU/CUDA/PyTorch 版本、运行时计划、耗时、峰值显存、全部指标。
-
-```bash
-cloudwater report --experiment experiment_001        # 单实验报告
-cloudwater report                                   # 全部实验对比
-cloudwater compare --experiments exp1 exp2          # 指定对比
-```
-
----
-
-## 9. 断点续训
-
-```bash
-cloudwater resume --experiment experiment_001
-```
-
-- 恢复模型 / 优化器 / 调度器 / GradScaler / 随机数状态 / 历史曲线 / 早停状态；
-- **新建实验目录**，不覆盖原结果；新实验通过 `parent_run_id` 关联原实验。
-
----
-
-## 10. 性能测试
-
-```bash
-cloudwater gpu benchmark --samples 8192 --epochs 2 --out outputs/benchmark.md
-```
-
-输出：samples/s、epoch 耗时、**数据加载 / 设备传输 / 计算**三段耗时、
-峰值显存与内存、瓶颈判定，以及**按本机实测硬件**推导的配置建议。
-详见 [`docs/benchmark.md`](docs/benchmark.md)。
-
----
-
-## 11. 不确定性
-
-```yaml
-evaluation:
-  uncertainty:
-    enabled: true
-    method: conformal     # 分割共形区间（名义覆盖率 1-alpha）
-    alpha: 0.1
-```
-
-用**验证集做校准集**生成预测区间，并给出实际覆盖率、平均宽度与 CRPS。
-**普通模型的预测误差不会被称作置信区间**；没有区间来源时接口直接报错。
-
----
-
-## 12. 故障排查
-
-| 症状 | 处理 |
+| 项 | 状态 |
 |---|---|
-| `import cloudwater_ml` 失败 / `cloudwater` 命令报 ModuleNotFound | 用 `./scripts/cloudwater ...` 或 `PYTHONPATH=src`（iCloud 把 `.pth` 标成 hidden，环境问题） |
-| `配置指定 cuda，但当前环境无可用 CUDA 设备` | 装 CUDA 版 torch，或用 `device: auto` |
-| `no kernel image is available` | Blackwell 需 cu128 构建 |
-| 显存 OOM | 降 `batch_size` / 开 `gradient_accumulation_steps` / 开 `grad_checkpointing` / 降精度 |
-| `subset 结果为空：来源标签未解析` | 数据没声明来源：设 `data.source_label` 或把 `mix.real_fraction` 置 null |
-| `实验目录已存在且非空` | 换 `--name`；确需覆盖用 `--force`（旧目录会备份） |
-| 物理约束没效果 | `nonnegativity_weight` 是否 > 0（0 = 关闭，框架会告警） |
-| 训练慢、GPU 占用低 | 看 `runtime_plan.profiling`：`data_load` 占比大就调 workers/prefetch |
-| 指标里没有 NSE | `evaluation.metrics` 里显式列出 `nse` |
+| 单元/集成/端到端测试 | ✅ 303 passed, 6 skipped |
+| Lint（ruff） | ✅ 0 error |
+| 8 个模型可训练 | ✅ 前向/梯度/存取/最小训练全部通过 |
+| 端到端流式训练（NetCDF→训练） | ✅ 真实 NetCDF 测试通过 |
+| 物理非负硬约束 | ✅ `negative_values` 检查 FAIL→PASS |
+| **CUDA 实跑数字（RTX 5060 等）** | ⚠️ **NOT_RUN** — 开发机为 Apple Silicon（无 NVIDIA GPU）；已提供 `scripts/gpu_acceptance.py`，GPU 机器上一条命令出结果 |
+| **真实 ERA5 科研结论** | ⚠️ **NOT_RUN** — 仓库只有合成测试数据；接入真实数据需先确认变量单位口径 |
+| 预留物理约束（CWP 积分/水量守恒/廓线/水循环） | ⚠️ **未实现且构造即抛** — 缺少 $\rho_{\text{air}}(z)$/边界条件等前置输入；`requirements()` 会列出缺什么 |
 
 ---
 
-## 13. 文档索引
+## 文档
 
 | 文档 | 内容 |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | 架构分层、依赖方向、模块职责 |
-| [`docs/engineering_audit.md`](docs/engineering_audit.md) | **工程审计报告**（现状/缺陷/瓶颈/风险/顺序） |
-| [`docs/upgrade_report.md`](docs/upgrade_report.md) | **v2.0 升级交付报告**（架构图/差异/实测/模型状态/遗留） |
-| [`docs/gpu_training.md`](docs/gpu_training.md) | GPU 训练：设备/精度/累积/显存/续训 |
-| [`docs/data_engine.md`](docs/data_engine.md) | 数据引擎：流式读取/缓存/质量/溯源 |
-| [`docs/model_registry.md`](docs/model_registry.md) | 模型注册表与扩展规范 |
-| [`docs/physics_constraints.md`](docs/physics_constraints.md) | 物理约束体系与单位口径 |
-| [`docs/experiment_management.md`](docs/experiment_management.md) | 实验生命周期、状态机、对比 |
-| [`docs/benchmark.md`](docs/benchmark.md) | 性能基准与瓶颈归因 |
-| [`docs/reproducibility.md`](docs/reproducibility.md) | 可复现性：代码/数据/随机性/环境 |
-| [`docs/deployment.md`](docs/deployment.md) | 部署、目录约定、批处理、备份迁移 |
-| [`docs/data_schema.md`](docs/data_schema.md) | 数据契约（v1.0） |
-| [`docs/experiment_protocol.md`](docs/experiment_protocol.md) | 实验协议（v1.0） |
+| [engineering_audit.md](docs/engineering_audit.md) | 工程审计（3 BLOCKER + 17 MAJOR，附 `file:line` 与修复状态） |
+| [formulation.md](docs/formulation.md) | **数学规格**：全部公式 + 代码对照 |
+| [architecture.md](docs/architecture.md) | 分层架构与依赖方向 |
+| [gpu_training.md](docs/gpu_training.md) | GPU 训练：设备/精度/累积/显存/续训/故障排查 |
+| [data_engine.md](docs/data_engine.md) | 数据引擎：流式/缓存/质量/溯源 |
+| [model_registry.md](docs/model_registry.md) | 模型契约与扩展规范 |
+| [physics_constraints.md](docs/physics_constraints.md) | 物理约束与单位口径 |
+| [experiment_management.md](docs/experiment_management.md) | 实验生命周期与对比 |
+| [benchmark.md](docs/benchmark.md) | 性能基准与瓶颈归因 |
+| [reproducibility.md](docs/reproducibility.md) | 可复现性 |
+| [deployment.md](docs/deployment.md) | 部署与运行手册 |
+| [upgrade_report.md](docs/upgrade_report.md) | v2.0 交付报告（架构图/差异/实测/遗留/路线） |
 
 ---
 
-## 14. 边界与诚实性约定
+## 许可
 
-- **不伪造**：未实现的写成「未实现」并让接口报错；不把占位符包装成已实现；
-- **不伪造科研结论**：合成数据只用于工程链路验证，不得写成观测结论；
-- **不擅自改数据**：原始科研数据只读；清洗需显式开启且全部留痕；
-- **不静默降级**：设备回退、精度降级、配比未达成、缓存失效都记录原因；
-- **不覆盖结果**：同名实验目录默认拒绝覆盖；续训新建实验。
-
-## 15. 许可
-
-MIT。
+MIT
