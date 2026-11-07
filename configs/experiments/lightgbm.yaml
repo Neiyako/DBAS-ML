@@ -1,0 +1,27 @@
+# LightGBM 基线：梯度提升；依赖缺失时给出清晰提示且不影响其他模块
+extends: [../data.yaml, ../training.yaml]
+
+experiment:
+  name: lightgbm
+  description: LightGBM 梯度提升基线（多目标=逐目标独立模型），输出特征重要性
+  output_name: null
+
+model:
+  name: lightgbm
+  params:
+    n_estimators: 300
+    learning_rate: 0.05
+    num_leaves: 31
+    subsample: 0.9
+    colsample_bytree: 0.9
+    random_state: 42
+
+# 按年份划分：整年归属同一子集，杜绝跨年泄漏
+split:
+  strategy: year
+  ratios: [0.6, 0.2, 0.2]
+  params: {}
+  seed: 42
+
+mix:
+  real_fraction: null       # 未启用混合（A~E 需接入真实数据后开启，见 docs/experiment_protocol.md）

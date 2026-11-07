@@ -1,0 +1,12 @@
+# 模型配置（默认值；各实验可在 configs/experiments/*.yaml 覆盖 model 段）
+# name: mlp | random_forest | lightgbm | cnn | unet | convlstm | multitask
+# 后四者为预留接口（第二阶段），调用时会明确报 NOT_IMPLEMENTED，不伪装成已实现。
+model:
+  name: mlp
+  params: {}
+  # mlp 常用参数示例：
+  #   hidden_layers: [128, 64]
+  #   activation: relu          # relu | gelu | tanh（输出层恒为线性，不使用 ReLU）
+  #   dropout: 0.1
+  # random_forest 常用参数：n_estimators / max_depth / min_samples_leaf / n_jobs
+  # lightgbm 常用参数：n_estimators / learning_rate / num_leaves / objective（多目标为逐目标独立模型）

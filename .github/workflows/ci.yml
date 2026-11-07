@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  cpu:
+    name: CPU tests (no GPU required)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check src tests
+      - name: Pytest (skip GPU tests)
+        run: python -m pytest -q -m "not gpu"
+      - name: Package build
+        run: python -m pip install --upgrade build && python -m build
+
+  gpu:
+    name: GPU tests (CUDA runner)
+    runs-on: ubuntu-latest
+    # 需要自托管带 NVIDIA GPU 的 runner；GitHub 公共 runner 无 GPU
+    # 本 job 在没有 GPU 的仓库里保持 pending/skipped，不伪造结果。
+    if: ${{ vars.CW_GPU_RUNNER_ENABLED == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (CUDA build)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Show GPU
+        run: nvidia-smi
+      - name: Pytest (GPU tests)
+        run: python -m pytest -q -m "gpu"

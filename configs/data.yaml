@@ -1,0 +1,33 @@
+# 数据配置：特征 / 目标 / 适配器 / 按需读取 / 质量检查
+# 输入输出变量完全由本文件配置；不同数据源不必同时具备全部变量。
+data:
+  adapter: npz                # npz | csv | parquet | netcdf
+  path: data/synthetic/cloudwater_synth.npz
+  features: [t, q, rh, u, v, w]   # 输入特征（自由配置）
+  targets: [clwc, ciwc]           # 预测目标（自由配置，单目标或多目标）
+  meta_columns: [sample_id, time, latitude, longitude, source, dataset]
+  source_label: null              # 显式覆盖来源标签 real|simulated；null = 自动（由数据/契约推断）
+
+  # 仅 adapter=netcdf 生效：默认不整载入内存，按需分块 + 范围筛选
+  netcdf:
+    time_range: null          # [start, end]，如 ["2015-01-01", "2015-12-31"]
+    latitude_range: null      # [min, max]
+    longitude_range: null     # [min, max]
+    level_range: null         # [min, max]（气压层 hPa）
+    chunks: { time: 16 }      # 分块读取维度
+    engine: auto              # auto | netcdf4 | h5netcdf | scipy
+
+  sampling:
+    stride: 1                 # 时间/空间抽样步长
+    max_samples: null         # 上限（null = 不限）
+
+  quality:                    # 质量检查：默认只生成报告，不修改科研数据
+    report_only: true
+    checks: [missing, nan_inf, extreme, range, dimensions, units]
+    ranges: {}                # 变量名: [min, max]，如 {clwc: [0.0, 0.05]}
+
+  synthetic:                  # 生成 data/synthetic 测试数据的参数（仅用于工程链路验证）
+    n_samples: 5000
+    seed: 42
+    start_year: 2015
+    end_year: 2019

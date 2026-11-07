@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# 环境
+.venv/
+venv/
+
+# 实验产物（保留目录与 .gitkeep）
+outputs/*
+!outputs/.gitkeep
+
+# 数据（原始数据不入库；合成测试数据可由固定种子重建）
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/synthetic/*.npz
+
+# 系统文件
+.DS_Store
+
+# v2.0 数据缓存（可重建）
+.cache/
+.mypy_cache/

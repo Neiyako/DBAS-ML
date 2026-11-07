@@ -1,0 +1,62 @@
+"""工具层：配置、可复现性、日志、设备、异常。"""
+from .config import deep_merge, get_nested, load_config, load_yaml, save_config
+from .config_schema import describe_config, validate_config
+from .device import available_devices, resolve_device
+from .exceptions import (
+    CacheError,
+    CheckpointError,
+    CloudWaterError,
+    ConfigurationError,
+    DataError,
+    DataNotFoundError,
+    DataValidationError,
+    DependencyError,
+    DeviceError,
+    ExperimentError,
+    ExperimentStateError,
+    ModelError,
+    ModelNotRegisteredError,
+    OutOfMemoryError,
+    PhysicsConstraintError,
+    TrainingError,
+    UncertaintyNotSupportedError,
+)
+from .logging import get_logger, log_event, log_exception, setup_logging
+from .reproducibility import capture_rng_state, get_rng, restore_rng_state, set_seed
+
+__all__ = [
+    "deep_merge",
+    "get_nested",
+    "load_config",
+    "load_yaml",
+    "save_config",
+    "describe_config",
+    "validate_config",
+    "available_devices",
+    "resolve_device",
+    "get_logger",
+    "setup_logging",
+    "log_event",
+    "log_exception",
+    "get_rng",
+    "set_seed",
+    "capture_rng_state",
+    "restore_rng_state",
+    "CloudWaterError",
+    "ConfigurationError",
+    "DependencyError",
+    "DeviceError",
+    "DataError",
+    "DataNotFoundError",
+    "DataValidationError",
+    "CacheError",
+    "ModelError",
+    "ModelNotRegisteredError",
+    "TrainingError",
+    "OutOfMemoryError",
+    "CheckpointError",
+    "ExperimentError",
+    "ExperimentStateError",
+    "PhysicsConstraintError",
+    "UncertaintyNotSupportedError",
+]

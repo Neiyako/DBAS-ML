@@ -1,0 +1,25 @@
+# Random Forest 基线：随机划分 + 特征重要性输出
+extends: [../data.yaml, ../training.yaml]
+
+experiment:
+  name: random_forest
+  description: 随机森林传统机器学习基线（sklearn），输出特征重要性
+  output_name: null
+
+model:
+  name: random_forest
+  params:
+    n_estimators: 200
+    max_depth: null
+    min_samples_leaf: 2
+    n_jobs: 1                   # 单进程：受限环境（进程数受限）下 joblib 多进程会段错误；提速可改 -1
+    random_state: 42
+
+split:
+  strategy: random
+  ratios: [0.7, 0.15, 0.15]
+  params: {}
+  seed: 42
+
+mix:
+  real_fraction: null       # 未启用混合（A~E 需接入真实数据后开启，见 docs/experiment_protocol.md）

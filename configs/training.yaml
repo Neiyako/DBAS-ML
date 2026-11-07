@@ -1,0 +1,66 @@
+# 训练配置（PyTorch 模型生效；sklearn/LightGBM 基线忽略 epochs 等训练循环参数）
+training:
+  epochs: 100
+  batch_size: 256
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  optimizer: adamw            # adam | adamw | sgd
+  loss: mse                   # mse | mae | huber
+  huber_delta: 1.0
+  scheduler: null             # null | cosine | step
+  early_stopping:
+    enabled: true
+    patience: 15
+    min_delta: 0.0001
+  seed: 42
+  device: auto                # auto | cpu | mps | cuda（v1.0 键，仍生效）
+  num_workers: auto           # v1.0 键（默认值改为 auto；具体值仍优先于 dataloader 段的 auto）
+  grad_clip: null
+  resume: null                # checkpoint 路径；设置后从该点恢复训练
+  gradient_accumulation_steps: 1   # 梯度累积步数（等效 batch = batch_size × 本值）
+  gradient_clip_norm: null         # 梯度裁剪范数（v2.0 键；与上面的 grad_clip 等价）
+
+# 硬件与精度（v2.0 新增；不写则全部按 auto 推断，CPU 环境同样可用）
+hardware:
+  device: auto                # auto | cpu | cuda | mps（优先级高于 training.device）
+  precision: auto             # auto | fp32 | fp16 | bf16
+  compile: false              # torch.compile（首次编译有额外耗时，默认关闭）
+  channels_last: auto         # auto | true | false（auto 仅对 4D 卷积模型启用）
+  grad_checkpointing: false   # 大模型梯度检查点（换算力省显存）
+
+# DataLoader（v2.0 新增；所有项都有 CPU 回退）
+dataloader:
+  num_workers: auto           # auto（按 CPU 核数与数据量推断）| 整数
+  pin_memory: true            # 仅 CUDA 生效（auto 时非 CUDA 自动关闭）
+  persistent_workers: true    # num_workers=0 时自动失效
+  prefetch_factor: 2          # num_workers=0 时自动失效
+
+# 归一化（参数只允许在训练集上拟合，验证/测试仅 transform）
+preprocessing:
+  scale: auto                # auto（torch 模型缩放，树模型不缩放） | true | false
+  method: standard           # standard | minmax | none
+
+# 数据划分：防时空泄漏的关键配置（详见 docs/experiment_protocol.md）
+split:
+  strategy: time              # random | time | year | region | source
+  ratios: [0.7, 0.15, 0.15]   # train / val / test
+  params: {}                  # strategy 专属参数（time: train_end/val_end；region: boxes；source: order）
+  seed: 42
+
+# 仿真/真实混合比例（仅作用于训练集，A~E 实验；测试集永不参与配比）
+mix:
+  real_fraction: 1.0          # A=1.0  B=0.75  C=0.5  D=0.25  E=0.0
+
+# 评价配置
+evaluation:
+  metrics: [mae, mse, rmse, r2, bias]
+  subgroups: [year, season, region]   # 泛化分析分组（依赖 meta 列存在）
+  robustness:
+    noise_levels: [0.0, 0.05, 0.1]    # 相对输入标准差的噪声强度
+  uncertainty:
+    enabled: false                    # 预留：prediction interval / coverage / CRPS
+
+# 物理约束（默认全部关闭；未验证的物理假设不得强制写入模型）
+physics:
+  constraints: []             # 可选: nonnegativity | cwp_consistency
+  nonnegativity_weight: 0.0

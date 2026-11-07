@@ -1,0 +1,29 @@
+# 实验 A：100% 真实数据（本仓库默认使用合成测试数据占位，真实数据接入见 README）
+extends: [../data.yaml, ../training.yaml]
+
+experiment:
+  name: mlp_baseline
+  description: MLP 基线：时序划分（防时空泄漏），单/多目标回归
+  output_name: null           # null = 自动 outputs/experiment_XXX
+
+model:
+  name: mlp
+  params:
+    hidden_layers: [128, 64]
+    activation: relu
+    dropout: 0.1
+
+# 覆盖 training.yaml 的 split：按时间划分，训练集不含未来样本
+split:
+  strategy: time
+  ratios: [0.7, 0.15, 0.15]
+  params:
+    train_end: "2017-12-31T23:59:59"
+    val_end: "2018-12-31T23:59:59"
+  seed: 42
+
+mix:
+  real_fraction: null       # 未启用混合（A~E 需接入真实数据后开启，见 docs/experiment_protocol.md）
+
+physics:
+  constraints: []

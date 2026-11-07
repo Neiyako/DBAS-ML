@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloudwater-ml"
+version = "2.0.0"
+description = "Cloud Water ML Platform — 云水资源科研机器学习平台（CLWC/CIWC/CWP 反演与时空预测）"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Cloud Water ML Platform contributors" }]
+keywords = ["cloud-water", "machine-learning", "pytorch", "ERA5", "CLWC", "CIWC", "CWP", "CUDA"]
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "xarray>=2024.1",
+    "netcdf4>=1.6",
+    "scikit-learn>=1.4",
+    "PyYAML>=6.0",
+    "typer>=0.12",
+    "matplotlib>=3.8",
+    "torch>=2.2",
+]
+
+[project.optional-dependencies]
+lgbm = ["lightgbm>=4.0"]
+xgboost = ["xgboost>=2.0"]
+parquet = ["pyarrow>=15"]
+dask = ["dask[array]>=2024.1"]
+gpu = ["torch>=2.2"]
+dev = [
+    "pytest>=8.0",
+    "lightgbm>=4.0",
+    "pyarrow>=15",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+cloudwater = "cloudwater_ml.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]  # 防御：iCloud 会把 .venv 内 .pth 标为 hidden 致其被 site 跳过
+markers = [
+    "gpu: 需要 CUDA 设备的测试（无 CUDA 时自动跳过）",
+    "integration: 跨模块集成测试",
+    "pipeline: 端到端链路测试",
+    "perf: 性能基准测试（耗时较长）",
+    "slow: 运行较慢的测试",
+]
+
+# ----------------------------------------------------------------------
+# 静态检查
+# ----------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    "E501",    # 行宽由 formatter 负责
+    "B008",    # typer.Option() 是函数调用默认值（B008 误报）
+    "SIM108",  # 三元表达式不强制
+    "B905",    # zip(strict=) 与 py311 兼容但本项目暂不强制
+    "UP042",   # `class X(str, Enum)` 是刻意设计：让枚举值可直接与字符串比较/序列化
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]
+"scripts/*" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+ignore_missing_imports = true
+check_untyped_defs = true
+disallow_untyped_defs = false
+exclude = ["\\.venv/", "build/", "outputs/"]
+
+[[tool.mypy.overrides]]
+module = ["netCDF4.*", "lightgbm.*", "xgboost.*", "pyarrow.*", "dask.*"]
+ignore_missing_imports = true
