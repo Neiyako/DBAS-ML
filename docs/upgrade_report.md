@@ -168,7 +168,7 @@ $ python -m pytest -q
 | 4 | ~~physics_report 判 FAIL（负 clwc/ciwc）~~ | **已解决**：新增 `MLP(output_activation=softplus)` 硬约束（`configs/experiments/mlp_nonneg.yaml`），`negative_values` 由 FAIL→PASS；代价 R² 0.976→0.744（显式取舍） | — |
 | 5 | ~~region 分组恒 skipped~~ | **已解决**：`configs/training.yaml` 增加 `evaluation.region_boxes`，区域指标已产出 | — |
 | 6 | `docs/data_schema.md` / `docs/experiment_protocol.md` / `docs/model_design.md` 仍是 v1.0 文本 | 与 v2.0 细节有出入 | 建议下轮统一重写（本轮已新增 7 篇 v2.0 文档） |
-| 7 | mypy 仅配置基线，未做全量类型收敛 | 类型错误可能漏过 | 下轮分批 `mypy src` 收敛 |
+| 7 | mypy 仅配置基线：`mypy src/cloudwater_ml` 当前 47 条告警，**均为 `nn.Module` 动态属性/`Optional` 收窄的误报**（已逐条人工核对，运行时行为由测试覆盖），未做全量收敛 | 类型回归无法自动拦截 | 下轮分批加 `cast`/`Protocol` 收敛并进 CI |
 | 8 | 缓存不跨机器迁移 | 换机需重建（只影响速度） | 可接受，文档已说明 |
 
 ---

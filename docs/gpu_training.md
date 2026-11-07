@@ -212,6 +212,10 @@ cloudwater gpu benchmark --samples 8192 --batch-size 256
 在带 NVIDIA GPU 的机器上执行：
 
 ```bash
+# 一键验收（推荐）：设备识别 / CUDA 训练 / AMP / 峰值显存 / OOM 处理
+python scripts/gpu_acceptance.py --json outputs/gpu_acceptance.json
+
+# 或逐条手工执行
 pip install -e ".[dev]"
 cloudwater doctor                       # 应显示 CUDA 可用、无 fallback
 cloudwater gpu info                     # 应显示型号/sm_120/显存
