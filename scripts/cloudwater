@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+"""cloudwater 启动器（不依赖 .pth / 安装状态）。
+
+为什么需要它：macOS 上放在 iCloud 同步目录（如 Desktop）里的项目，iCloud 会
+反复给 `.venv/lib/*/site-packages/*.pth` 打上 `hidden` 文件标志，Python 的
+`site` 模块会跳过 hidden 的 `.pth`，导致 `cloudwater` 控制台脚本
+`import cloudwater_ml` 失败（`ModuleNotFoundError`）。
+
+本脚本直接把 `src/` 插到 `sys.path` 最前面，因此**无论是否安装、无论 .pth 是否
+被隐藏**都能运行：
+
+    ./scripts/cloudwater doctor
+    ./scripts/cloudwater train --config configs/experiments/mlp_baseline.yaml
+
+等价写法（任选其一）：
+
+    PYTHONPATH=src cloudwater doctor
+    PYTHONPATH=src python -m cloudwater_ml.cli doctor
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+_SRC = Path(__file__).resolve().parents[1] / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from cloudwater_ml.cli import app  # noqa: E402  （必须在 sys.path 调整之后导入）
+
+if __name__ == "__main__":
+    app()

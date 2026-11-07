@@ -44,9 +44,18 @@ pip install -e ".[dask]"           # TB 级 NetCDF 分块读取（可选）
 | `dask` | dask | TB 级 NetCDF 分块/惰性读取 |
 | `dev` | pytest / ruff / mypy | 开发与 CI |
 
-> **macOS 提示**：iCloud 可能把 `.venv` 内 `.pth` 标记为 hidden 导致 `import cloudwater_ml` 失败。
-> 直接用命令行时加 `export PYTHONPATH=src`（pytest 已通过 `pyproject.toml` 的
-> `pythonpath = ["src"]` 自动处理）。
+> **macOS / iCloud 提示（已实测）**：放在 iCloud 同步目录（如 `Desktop`）里的项目，
+> iCloud 会反复把 `.venv/lib/*/site-packages/*.pth` 打上 `hidden` 标志，
+> Python 的 `site` 模块会跳过 hidden 的 `.pth` → `cloudwater` 控制台脚本报
+> `ModuleNotFoundError: No module named 'cloudwater_ml'`。
+>
+> 三种解法（任选其一）：
+> 1. **推荐**：用仓库自带启动器 `./scripts/cloudwater ...`（不依赖 `.pth`）；
+> 2. `PYTHONPATH=src cloudwater ...`；
+> 3. 临时清标志 `chflags nohidden .venv/lib/python3.13/site-packages/*.pth`
+>    （iCloud 可能会再次设置，属环境问题）。
+>
+> pytest 不受影响（`pyproject.toml` 已设 `pythonpath = ["src"]`）。
 
 ---
 
@@ -277,7 +286,7 @@ evaluation:
 
 | 症状 | 处理 |
 |---|---|
-| `import cloudwater_ml` 失败 | `export PYTHONPATH=src`（macOS + iCloud 已知问题） |
+| `import cloudwater_ml` 失败 / `cloudwater` 命令报 ModuleNotFound | 用 `./scripts/cloudwater ...` 或 `PYTHONPATH=src`（iCloud 把 `.pth` 标成 hidden，环境问题） |
 | `配置指定 cuda，但当前环境无可用 CUDA 设备` | 装 CUDA 版 torch，或用 `device: auto` |
 | `no kernel image is available` | Blackwell 需 cu128 构建 |
 | 显存 OOM | 降 `batch_size` / 开 `gradient_accumulation_steps` / 开 `grad_checkpointing` / 降精度 |
