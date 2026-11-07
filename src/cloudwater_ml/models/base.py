@@ -55,7 +55,7 @@ class TrainingResult:
 # ----------------------------------------------------------------------
 # 注册表
 # ----------------------------------------------------------------------
-MODEL_REGISTRY: dict[str, type["BaseModel"]] = {}
+MODEL_REGISTRY: dict[str, type[BaseModel]] = {}
 # 惰性模型：name -> 模块路径（首次使用时才 import）
 # 原因：macOS 上 torch 与 LightGBM 的 OpenMP 运行库不能在同一进程共存
 # （先 import torch 再 fit LightGBM → Abort trap: 6），惰性加载让 LightGBM
@@ -136,7 +136,7 @@ def available_models() -> list[str]:
     return sorted(set(MODEL_REGISTRY) | set(_LAZY_MODULES))
 
 
-def build_model(name: str, params: dict[str, Any] | None = None) -> "BaseModel":
+def build_model(name: str, params: dict[str, Any] | None = None) -> BaseModel:
     _ensure_loaded(name)
     if name not in MODEL_REGISTRY:
         raise KeyError(
@@ -210,11 +210,11 @@ class BaseModel(ABC):
 
     @classmethod
     @abstractmethod
-    def _load_from(cls, path: Path, meta: dict[str, Any]) -> "BaseModel":
+    def _load_from(cls, path: Path, meta: dict[str, Any]) -> BaseModel:
         """子类从目录还原实例（含权重与 feature/target names）。"""
 
     @classmethod
-    def load(cls, path: str | Path) -> "BaseModel":
+    def load(cls, path: str | Path) -> BaseModel:
         """从保存目录还原模型（等价于模块级 load_model）。"""
         return load_model(path)
 

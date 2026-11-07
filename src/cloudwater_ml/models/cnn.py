@@ -25,9 +25,10 @@ from __future__ import annotations
 import copy
 import math
 import time
+from collections.abc import Callable
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import torch
@@ -614,7 +615,7 @@ class CNN(BaseModel):
         )
 
     @classmethod
-    def _load_from(cls, path: Path, meta: dict[str, Any]) -> "CNN":
+    def _load_from(cls, path: Path, meta: dict[str, Any]) -> CNN:
         blob = torch.load(path / "model.pt", map_location="cpu", weights_only=True)
         st = blob["structure"]
         model = cls(

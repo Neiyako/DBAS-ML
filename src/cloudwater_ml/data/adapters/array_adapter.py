@@ -187,8 +187,7 @@ def _iter_parquet_frames(path: Path, columns: list[str], batch_rows: int) -> Ite
 
 def _iter_csv_frames(path: Path, columns: list[str], batch_rows: int) -> Iterator[pd.DataFrame]:
     """csv 分块读。"""
-    for chunk in pd.read_csv(path, usecols=columns, chunksize=batch_rows):
-        yield chunk
+    yield from pd.read_csv(path, usecols=columns, chunksize=batch_rows)
 
 
 @register_adapter("npz")

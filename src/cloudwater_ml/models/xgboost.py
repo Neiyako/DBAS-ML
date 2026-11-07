@@ -235,7 +235,7 @@ class XGBoostModel(BaseModel):
             m.get_booster().save_model(str(path / f"model_target_{i}.json"))
 
     @classmethod
-    def _load_from(cls, path: Path, meta: dict[str, Any]) -> "XGBoostModel":
+    def _load_from(cls, path: Path, meta: dict[str, Any]) -> XGBoostModel:
         _require_xgb()
         params = dict(meta.get("params") or {})
         known_keys = (

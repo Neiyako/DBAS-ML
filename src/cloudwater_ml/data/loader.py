@@ -17,8 +17,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import numpy as np

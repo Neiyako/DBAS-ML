@@ -372,7 +372,7 @@ class ConvLSTM(BaseModel):
         torch.save(payload, path / "model.pt")
 
     @classmethod
-    def _load_from(cls, path: Path, meta: dict[str, Any]) -> "ConvLSTM":
+    def _load_from(cls, path: Path, meta: dict[str, Any]) -> ConvLSTM:
         blob = torch.load(path / "model.pt", map_location="cpu", weights_only=True)
         st = blob["structure"]
         model = cls(

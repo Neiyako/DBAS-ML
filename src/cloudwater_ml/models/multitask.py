@@ -301,7 +301,7 @@ class MultiTask(BaseModel):
         )
 
     @classmethod
-    def _load_from(cls, path: Path, meta: dict[str, Any]) -> "MultiTask":
+    def _load_from(cls, path: Path, meta: dict[str, Any]) -> MultiTask:
         blob = torch.load(path / "model.pt", map_location="cpu", weights_only=True)
         st = blob["structure"]
         model = cls(

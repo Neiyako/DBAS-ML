@@ -10,13 +10,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from ..schema import SampleBundle
 
 __all__ = ["DataAdapter", "register_adapter", "get_adapter", "available_adapters", "ADAPTERS"]
 
-ADAPTERS: dict[str, type["DataAdapter"]] = {}
+ADAPTERS: dict[str, type[DataAdapter]] = {}
 
 
 def register_adapter(name: str):
@@ -30,7 +31,7 @@ def register_adapter(name: str):
     return deco
 
 
-def get_adapter(name: str) -> "DataAdapter":
+def get_adapter(name: str) -> DataAdapter:
     if name not in ADAPTERS:
         raise KeyError(
             f"未知数据适配器 {name!r}，可用: {sorted(ADAPTERS)}（新增格式请实现 DataAdapter 子类并注册）"

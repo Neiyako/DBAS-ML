@@ -71,6 +71,9 @@ ignore = [
     "SIM108",  # 三元表达式不强制
     "B905",    # zip(strict=) 与 py311 兼容但本项目暂不强制
     "UP042",   # `class X(str, Enum)` 是刻意设计：让枚举值可直接与字符串比较/序列化
+    "SIM102",  # 嵌套 if 有时更易读（保持原结构）
+    "SIM105",  # try/except/pass 与 contextlib.suppress 等价，存量代码保留
+    "B007",    # 循环变量未使用：xarray 解构 tuple 时属正常写法
 ]
 
 [tool.ruff.lint.per-file-ignores]

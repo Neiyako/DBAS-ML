@@ -130,7 +130,7 @@ class RandomForestModel(BaseModel):
         joblib.dump(self.model, path / "model.joblib")
 
     @classmethod
-    def _load_from(cls, path: Path, meta: dict[str, Any]) -> "RandomForestModel":
+    def _load_from(cls, path: Path, meta: dict[str, Any]) -> RandomForestModel:
         params = dict(meta.get("params") or {})
         known = {k: params[k] for k in
                  ("n_estimators", "max_depth", "min_samples_leaf", "n_jobs", "random_state")

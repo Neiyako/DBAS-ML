@@ -164,10 +164,9 @@ def test_loader_cache_roundtrip_and_clear(tmp_path, monkeypatch):
     import json as _json
 
     import numpy as np
-    import pandas as pd
 
     from cloudwater_ml.data.cache import DataCache
-    from cloudwater_ml.data.loader import _bundle_key, _load_cached_bundle, _store_cached_bundle
+    from cloudwater_ml.data.loader import _load_cached_bundle, _store_cached_bundle
 
     cache = DataCache(root=tmp_path / "cache")
     bundle = _bundle(n=30)
@@ -199,5 +198,5 @@ def test_cache_refuses_to_write_into_data_raw():
 
     from cloudwater_ml.data.cache import DataCache
 
-    with _pytest.raises(Exception):
+    with _pytest.raises((ValueError, OSError)):
         DataCache(root="data/raw/cache")

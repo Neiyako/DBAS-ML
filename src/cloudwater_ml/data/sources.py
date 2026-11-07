@@ -106,10 +106,10 @@ def _scene_key(row: pd.Series, *, level_block: float | None = None) -> str:
     time = str(row.get("time", "") or "")
     level = row.get("level", None)
     if level_block is not None and level is not None and not pd.isna(level):
-        try:
+        import contextlib
+
+        with contextlib.suppress(TypeError, ValueError):
             level = float(np.floor(float(level) / level_block) * level_block)
-        except (TypeError, ValueError):
-            pass
     lat = row.get("latitude", None)
     lon = row.get("longitude", None)
     return f"{dataset}|{time}|{level}|{lat}|{lon}"

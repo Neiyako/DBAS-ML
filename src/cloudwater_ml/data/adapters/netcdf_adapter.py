@@ -386,7 +386,7 @@ def _iter_blocks(
         return
     offset = 0
     for sl in _iter_slices(sizes, max(1, int(max_block_samples))):
-        block = ds.isel({d: s for d, s in zip(dims, sl)})
+        block = ds.isel(dict(zip(dims, sl)))
         rows = int(np.prod([int(block.sizes[d]) for d in dims]))
         yield block, offset, rows
         offset += rows

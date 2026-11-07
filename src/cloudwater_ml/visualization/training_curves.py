@@ -20,7 +20,7 @@ logger = logging.getLogger("cloudwater_ml.visualization")
 __all__ = ["plot_loss_curve"]
 
 
-def _as_frame(history: list[dict] | "pd.DataFrame") -> "pd.DataFrame":
+def _as_frame(history: list[dict] | pd.DataFrame) -> pd.DataFrame:
     if isinstance(history, pd.DataFrame):
         df = history.copy()
     else:
@@ -31,7 +31,7 @@ def _as_frame(history: list[dict] | "pd.DataFrame") -> "pd.DataFrame":
 
 
 def plot_loss_curve(
-    history: list[dict] | "pd.DataFrame",
+    history: list[dict] | pd.DataFrame,
     out_path,
 ) -> Path | None:
     """绘制训练/验证损失曲线。

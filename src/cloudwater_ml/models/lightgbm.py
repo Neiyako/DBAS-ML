@@ -183,7 +183,7 @@ class LightGBMModel(BaseModel):
             )
 
     @classmethod
-    def _load_from(cls, path: Path, meta: dict[str, Any]) -> "LightGBMModel":
+    def _load_from(cls, path: Path, meta: dict[str, Any]) -> LightGBMModel:
         _require_lgbm()
         params = dict(meta.get("params") or {})
         known_keys = ("n_estimators", "learning_rate", "num_leaves", "subsample",

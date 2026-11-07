@@ -10,7 +10,7 @@ import pytest
 
 from cloudwater_ml.data import make_synthetic_bundle
 from cloudwater_ml.models import available_models, build_model, load_model
-from cloudwater_ml.models.base import MODEL_REGISTRY, BaseModel, TrainingResult
+from cloudwater_ml.models.base import MODEL_REGISTRY, TrainingResult
 
 TRAIN_CFG = {
     "training": {
@@ -150,10 +150,9 @@ print("LGBM_SUBPROC_OK")
 
 def test_lightgbm_multitarget_independent_models():
     """子进程隔离验证：多目标=逐目标独立模型，输出特征重要性。"""
+    import os
     import subprocess
     import sys
-
-    import os
 
     root = Path(__file__).resolve().parents[1]
     env = {**os.environ, "PYTHONPATH": str(root / "src")}  # 绕过 .pth 可能被 hidden 的问题
