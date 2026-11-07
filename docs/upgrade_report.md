@@ -109,7 +109,25 @@ CLI (cloudwater): doctor | gpu info|benchmark | models list | data validate |
 | 三段耗时 | 数据加载 2.11 s / 计算 4.70 s（数据占比 31%） |
 | 峰值显存 | 0.008 GiB（MPS 驱动统计） |
 
-### 4.2 RTX 5060 / CUDA —— `NOT_RUN`
+### 4.2 远程 GPU Worker 联调结果（2026-11-07 22:20）
+
+测试端 Worker 已上线并联调通过，**但当前挂载的机器没有 CUDA**：
+
+| 项 | 结果 |
+|---|---|
+| Worker 健康 | `status=ok`, `version=0.1.0`, 单并发，`allow_generic_python=true` |
+| CUDA | **`cuda_available=false`**，`device_count=0`，`nvidia-smi` 不存在 |
+| 远程训练冒烟任务 | ✅ **SUCCEEDED**：mlp 850 参数 / 600 样本 / 3 epoch，`val_loss 0.6037 → 0.3627`，耗时 8.1 s |
+| 产物完整性 | ✅ 9 个产物（`best_model.pt`/`model.pt`/`metrics.json`/`result.json`/`report.md`/`train.log`/`worker.log`/`config.json`/`job.json`），均带 sha256 |
+| 复现信息 | ✅ 记录 python 3.13.13 / torch 2.15.0 / cuda_version=null / seed=42 / 起止时间 |
+
+> 结论：**远程执行链路已就绪**，缺的只是「GPU 机器」本身。
+> 一旦 Worker 部署到带 NVIDIA 显卡的机器，执行
+> `python scripts/gpu_acceptance.py --json outputs/gpu_acceptance.json`
+> 即可产出真实的 CUDA 数字（设备识别 / 训练 / AMP / 峰值显存 / OOM），
+> 无需改动本仓库任何代码。
+
+### 4.3 RTX 5060 / CUDA —— `NOT_RUN`
 
 | 项目 | 状态 | 说明 |
 |---|---|---|
