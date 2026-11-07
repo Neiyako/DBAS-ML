@@ -94,8 +94,10 @@ def _artifacts_ok(exp: Path) -> None:
         "config.yaml", "config.source.yaml", "metrics.json", "history.csv",
         "report.md", "preprocessors.json", "model/model_meta.json",
         "logs/quality_report.md", "logs/train.log",
-        "plots/loss_curve.png", "plots/prediction_vs_truth.png",
-        "plots/residual_distribution.png",
+        "plots/loss_curve.png", "plots/training_history.png",
+        "plots/parity_density.png", "plots/residual_diagnostics.png",
+        "plots/error_by_magnitude.png", "plots/spatial_maps.png",
+        "plots/robustness.png",
     ]
     missing = [rel for rel in required if not (exp / rel).exists()]
     assert not missing, f"缺少实验产物: {missing}"

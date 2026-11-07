@@ -390,12 +390,15 @@ def _run_experiment_impl(
     write_json(result.history, exp_dir / "logs/history.json")
 
     from ..visualization import (  # 延迟导入：训练完成后出图
+        plot_error_by_magnitude,
         plot_feature_importance,
         plot_loss_curve,
-        plot_prediction_vs_truth,
-        plot_residual_distribution,
-        plot_scatter_map,
-        plot_subgroup_rmse,
+        plot_parity_density,
+        plot_residual_diagnostics,
+        plot_robustness,
+        plot_spatial_maps,
+        plot_subgroup_performance,
+        plot_training_history,
     )
 
     plot_loss_curve(result.history, exp_dir / "plots/loss_curve.png")
@@ -503,11 +506,21 @@ def _run_experiment_impl(
     else:
         uncertainty = {"status": "disabled"}
 
-    # ---- 图 ----
-    plot_prediction_vs_truth(test.Y, y_pred, list(bundle.target_names),
-                             exp_dir / "plots/prediction_vs_truth.png")
-    plot_residual_distribution(test.Y, y_pred, list(bundle.target_names),
-                               exp_dir / "plots/residual_distribution.png")
+    # ---- 图（出版级：密度散点取代密集散点，统一设计系统） ----
+    _names = list(bundle.target_names)
+    _exp_note = (
+        f"数据：{(cfg.get('data') or {}).get('path', 'n/a')} · "
+        f"划分：{(cfg.get('split') or {}).get('strategy', '?')} · "
+        f"实验：{exp_dir.name} · 数值全部来自本次真实运行"
+    )
+    plot_training_history(result.history, exp_dir / "plots/training_history.png",
+                          note=_exp_note)
+    plot_parity_density(test.Y, y_pred, _names,
+                        exp_dir / "plots/parity_density.png", note=_exp_note)
+    plot_residual_diagnostics(test.Y, y_pred, _names,
+                               exp_dir / "plots/residual_diagnostics.png", note=_exp_note)
+    plot_error_by_magnitude(test.Y, y_pred, _names,
+                             exp_dir / "plots/error_by_magnitude.png", note=_exp_note)
     importance = None
     try:
         importance = model.feature_importance()
@@ -517,11 +530,17 @@ def _run_experiment_impl(
         plot_feature_importance(importance, exp_dir / "plots/feature_importance.png")
         write_json(importance, exp_dir / "logs/feature_importance.json")
     if ev.get("subgroups"):
-        plot_subgroup_rmse(ev["subgroups"], exp_dir / "plots/subgroup_rmse.png")
+        plot_subgroup_performance(ev["subgroups"], exp_dir / "plots/subgroup_performance.png",
+                                  note=_exp_note)
     if {"latitude", "longitude"}.issubset(test.meta.columns):
-        plot_scatter_map(test.meta["latitude"].to_numpy(), test.meta["longitude"].to_numpy(),
-                         y_pred[:, 0], exp_dir / "plots/spatial_map_pred.png",
-                         title=f"predicted {bundle.target_names[0]}")
+        _boxes = ((cfg.get("evaluation") or {}).get("region_boxes")) or None
+        plot_spatial_maps(
+            test.meta["longitude"].to_numpy(), test.meta["latitude"].to_numpy(),
+            test.Y, y_pred, _names, exp_dir / "plots/spatial_maps.png",
+            region_boxes=_boxes, note=_exp_note,
+        )
+    if robust:
+        plot_robustness(robust, exp_dir / "plots/robustness.png", note=_exp_note)
 
     # ---- 汇总落盘 ----
     duration = round(time.time() - t0, 2)
