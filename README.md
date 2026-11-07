@@ -295,6 +295,7 @@ evaluation:
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | 架构分层、依赖方向、模块职责 |
 | [`docs/engineering_audit.md`](docs/engineering_audit.md) | **工程审计报告**（现状/缺陷/瓶颈/风险/顺序） |
+| [`docs/upgrade_report.md`](docs/upgrade_report.md) | **v2.0 升级交付报告**（架构图/差异/实测/模型状态/遗留） |
 | [`docs/gpu_training.md`](docs/gpu_training.md) | GPU 训练：设备/精度/累积/显存/续训 |
 | [`docs/data_engine.md`](docs/data_engine.md) | 数据引擎：流式读取/缓存/质量/溯源 |
 | [`docs/model_registry.md`](docs/model_registry.md) | 模型注册表与扩展规范 |

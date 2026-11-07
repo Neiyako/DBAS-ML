@@ -41,7 +41,7 @@ def _require_xgb() -> Any:
     return xgb
 
 
-@register_model("xgboost")
+@register_model("xgboost", kind="传统机器学习")
 class XGBoostModel(BaseModel):
     """逐目标独立 ``XGBRegressor``（多目标=每目标一个模型）。
 

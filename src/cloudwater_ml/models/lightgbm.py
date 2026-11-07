@@ -26,7 +26,7 @@ def _require_lgbm() -> Any:
     return lgb
 
 
-@register_model("lightgbm")
+@register_model("lightgbm", kind="传统机器学习")
 class LightGBMModel(BaseModel):
     """逐目标独立 LGBMRegressor（多目标=每目标一个模型）。
 

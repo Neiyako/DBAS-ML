@@ -14,7 +14,7 @@ from .base import BaseModel, TrainingResult, register_model
 __all__ = ["RandomForestModel"]
 
 
-@register_model("random_forest")
+@register_model("random_forest", kind="传统机器学习")
 class RandomForestModel(BaseModel):
     """随机森林回归：多目标时逐目标独立森林（MultiOutputRegressor）。
 

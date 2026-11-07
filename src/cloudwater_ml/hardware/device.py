@@ -125,6 +125,7 @@ class DeviceInfo:
         d["gpu_devices"] = [g.to_dict() for g in self.gpu_devices]
         d["total_vram_gib"] = round(self.total_vram_bytes / (1024**3), 2)
         d["free_vram_gib"] = round(self.free_vram_bytes / (1024**3), 2)
+        d["device_summary"] = self.summary()
         return d
 
     def summary(self) -> str:

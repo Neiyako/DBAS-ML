@@ -352,6 +352,21 @@ $ python -m pytest -q
 
 ---
 
+## 11.5 缺陷修复状态（v2.0 完成后复核）
+
+| 缺陷 | 状态 | 修复位置 |
+|---|---|---|
+| B1 真实 NetCDF 训练集被清空 | ✅ 已修 | `experiments/runner.py` apply_mix 无标签时保持全量；`data/sources.py` 同规则；`data/schema.py` subset 空选择直接报错 |
+| B2 续训状态不连续 | ✅ 已修 | `training/checkpoint.py`（+scheduler/scaler/RNG/global_step/历史/早停）、`utils/reproducibility.py` |
+| B3 显存/内存无约束无观测 | ✅ 已修 | `hardware/memory.py`、`training/trainer.py`（OOM 捕获 + 峰值记录） |
+| D1–D15 数据层 | ✅ 大部分已修 | `data/cache.py`（缓存）、`data/adapters/netcdf_adapter.py`（流式/守卫/别名）、`data/validation.py`（时序/坐标/层/缺测）、`data/preprocessing.py`（拟合证据/NaN 策略）、`data/schema.py`（溯源透传） |
+| D14 训练层无 GPU 能力 | ✅ 已修 | `training/runtime.py` + `training/trainer.py` |
+| D15 CLI 缺命令 | ✅ 已修 | `cli.py`（doctor/gpu/models/data/cache/resume/compare/benchmark） |
+| D16 无统一异常 | ✅ 已修 | `utils/exceptions.py`（兼容旧 ValueError/RuntimeError） |
+| D17 配置无校验 | ✅ 已修 | `utils/config_schema.py`（已接入 runner） |
+
+详细交付见 [`docs/upgrade_report.md`](upgrade_report.md)。
+
 ## 12. 未解决问题 / 已知局限
 
 - 本轮**未**在真实 ERA5 NetCDF 与真实 GPU 上验证（环境不具备）→ 记 `NOT_RUN`，非 `PASS`。
