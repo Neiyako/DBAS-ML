@@ -16,8 +16,22 @@ __all__ = ["MLP", "MLPNet"]
 _ACTIVATIONS = {"relu": nn.ReLU, "gelu": nn.GELU, "tanh": nn.Tanh}
 
 
+#: 输出层激活：linear（默认）/ softplus / relu
+#: 物理量（CLWC/CIWC/CWP）非负时用 softplus（硬约束：恒 > 0 且可导）
+_OUTPUT_ACTIVATIONS = {
+    "linear": nn.Identity,
+    "softplus": nn.Softplus,
+    "relu": nn.ReLU,
+}
+
+
 class MLPNet(nn.Module):
-    """纯 torch 网络：隐藏层(Linear→Act→Dropout)* + 线性输出头（禁 ReLU）。"""
+    """纯 torch 网络：隐藏层(Linear→Act→Dropout)* + 输出头。
+
+    输出头默认线性；``output_activation='softplus'`` 时输出恒为正，
+    用于把「云水含量非负」做成**硬约束**（训练与推理一致生效，
+    而不是靠损失惩罚项软性约束）。
+    """
 
     def __init__(
         self,
@@ -26,10 +40,16 @@ class MLPNet(nn.Module):
         hidden_layers: list[int],
         activation: str = "relu",
         dropout: float = 0.0,
+        output_activation: str = "linear",
     ) -> None:
         super().__init__()
         if activation not in _ACTIVATIONS:
             raise ValueError(f"未知激活 {activation!r}，可选: {sorted(_ACTIVATIONS)}")
+        if output_activation not in _OUTPUT_ACTIVATIONS:
+            raise ValueError(
+                f"未知输出激活 {output_activation!r}，"
+                f"可选: {sorted(_OUTPUT_ACTIVATIONS)}"
+            )
         act_cls = _ACTIVATIONS[activation]
         layers: list[nn.Module] = []
         prev = n_in
@@ -38,7 +58,9 @@ class MLPNet(nn.Module):
             if dropout and float(dropout) > 0:
                 layers.append(nn.Dropout(float(dropout)))
             prev = int(h)
-        layers.append(nn.Linear(prev, n_out))  # 输出层恒为线性
+        layers.append(nn.Linear(prev, n_out))
+        if output_activation != "linear":
+            layers.append(_OUTPUT_ACTIVATIONS[output_activation]())
         self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -63,9 +85,15 @@ class MLP(BaseModel):
         hidden_layers: list[int] | None = None,
         activation: str = "relu",
         dropout: float = 0.0,
+        output_activation: str = "linear",
     ) -> None:
         hidden_layers = [128, 64] if hidden_layers is None else list(hidden_layers)
-        super().__init__(hidden_layers=list(hidden_layers), activation=activation, dropout=dropout)
+        super().__init__(
+            hidden_layers=list(hidden_layers),
+            activation=activation,
+            dropout=dropout,
+            output_activation=output_activation,
+        )
         self.net: MLPNet | None = None
         self.n_in: int | None = None
         self.n_out: int | None = None
@@ -98,6 +126,7 @@ class MLP(BaseModel):
             hidden_layers=list(self.params["hidden_layers"]),
             activation=str(self.params["activation"]),
             dropout=float(self.params["dropout"]),
+            output_activation=str(self.params.get("output_activation", "linear")),
         )
         training_cfg = dict((config or {}).get("training") or {})
         # physics 段位于完整配置顶层，须显式并入才能到达 Trainer → build_constraints
@@ -106,6 +135,43 @@ class MLP(BaseModel):
             training_cfg.setdefault("physics", physics_cfg)
         trainer = Trainer(self.net, training_cfg, config=config, model_name=self.name)
         result = trainer.fit(X, Y, X_val=X_val, Y_val=Y_val, out_dir=out_dir)
+        self.is_fitted = True
+        return result
+
+    # -- 流式训练 ------------------------------------------------------
+    def fit_stream(
+        self,
+        dataset: Any,
+        *,
+        n_features: int,
+        n_targets: int,
+        config: dict[str, Any] | None = None,
+        out_dir: str | Path | None = None,
+    ) -> TrainingResult:
+        """**流式训练**：数据集按批产出 ``(x, y)``，不要求整份数据在内存里。
+
+        与 :meth:`fit` 的唯一区别是数据来源；网络构造、归一化语义、检查点、
+        AMP、梯度累积全部复用同一套实现。
+        """
+        self.n_in, self.n_out = int(n_features), int(n_targets)
+        self.net = MLPNet(
+            self.n_in, self.n_out,
+            hidden_layers=list(self.params["hidden_layers"]),
+            activation=str(self.params["activation"]),
+            dropout=float(self.params["dropout"]),
+            output_activation=str(self.params.get("output_activation", "linear")),
+        )
+        training_cfg = dict((config or {}).get("training") or {})
+        physics_cfg = (config or {}).get("physics")
+        if isinstance(physics_cfg, dict):
+            training_cfg.setdefault("physics", physics_cfg)
+        trainer = Trainer(self.net, training_cfg, config=config, model_name=self.name)
+        result = trainer.fit_stream(
+            dataset,
+            n_features=self.n_in,
+            n_targets=self.n_out,
+            out_dir=out_dir,
+        )
         self.is_fitted = True
         return result
 
@@ -135,6 +201,7 @@ class MLP(BaseModel):
                     "hidden_layers": list(self.params["hidden_layers"]),
                     "activation": str(self.params["activation"]),
                     "dropout": float(self.params["dropout"]),
+                    "output_activation": str(self.params.get("output_activation", "linear")),
                 },
             },
             path / "model.pt",
@@ -148,6 +215,7 @@ class MLP(BaseModel):
             hidden_layers=st["hidden_layers"],
             activation=st["activation"],
             dropout=st["dropout"],
+            output_activation=st.get("output_activation", "linear"),
         )
         model.n_in, model.n_out = int(st["n_in"]), int(st["n_out"])
         model.net = MLPNet(
@@ -155,6 +223,7 @@ class MLP(BaseModel):
             hidden_layers=st["hidden_layers"],
             activation=st["activation"],
             dropout=st["dropout"],
+            output_activation=st.get("output_activation", "linear"),
         )
         model.net.load_state_dict(blob["state_dict"])
         model.is_fitted = bool(meta.get("is_fitted", True))

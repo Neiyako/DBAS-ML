@@ -58,7 +58,16 @@ evaluation:
   robustness:
     noise_levels: [0.0, 0.05, 0.1]    # 相对输入标准差的噪声强度
   uncertainty:
-    enabled: false                    # 预留：prediction interval / coverage / CRPS
+    enabled: false                    # 启用后走分割共形区间（用验证集做校准集）
+    method: conformal                 # conformal（已实现）；其它方法需自行提供采样源
+    alpha: 0.1                        # 名义覆盖率 = 1 - alpha
+  # 区域泛化分组：格式 [lon0, lon1, lat0, lat1]（闭区间）
+  # 注意：下列框是按仓库合成测试数据域（28–38N, 78–103E）举例的；
+  #       接入真实 ERA5 后请按研究区重新定义，否则区域指标没有物理意义。
+  region_boxes:
+    plateau_core: [85.0, 95.0, 30.0, 34.0]
+    plateau_east: [95.0, 103.0, 28.0, 38.0]
+    plateau_west: [78.0, 85.0, 28.0, 38.0]
 
 # 物理约束（默认全部关闭；未验证的物理假设不得强制写入模型）
 physics:

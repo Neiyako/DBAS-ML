@@ -87,6 +87,12 @@ class PhysicsConstraint:
 | `nonnegativity_clamp` | 硬 | 把预测 clamp 到 ≥ 0 |
 | `nonnegativity_softplus` | 硬 | 输出重参数化为 `softplus`，天然非负 |
 
+> **硬约束怎么真正生效**：`clamp` 类投影若只作用于损失，会与推理不一致。
+> 因此模型侧提供等价的输出层激活（`MLP(output_activation="softplus")`），
+> 训练与推理**用同一个变换**；配置示例见 `configs/experiments/mlp_nonneg.yaml`。
+> 实测：合成数据上 `negative_values` 检查由 **FAIL → PASS**
+> （代价是 R² 从 0.976 降到 0.744，属「物理正确换精度」的显式取舍）。
+
 ### 预留约束（**构造即抛** `NotImplementedError`）
 
 | 约束名 | 还缺什么 |

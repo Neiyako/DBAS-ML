@@ -1,0 +1,36 @@
+# 实验：云水含量非负硬约束（MLP + softplus 输出头）
+#
+# 为什么用硬约束而不是损失惩罚项：
+#   CLWC/CIWC 物理上恒 ≥ 0（云水含量不可能是负的），这是**已确定的物理事实**，
+#   不是待验证假设。用 softplus 输出头直接保证非负，训练与推理一致；
+#   而损失惩罚项只能在优化过程中"尽量"拉回来，推理时仍可能输出负值。
+#
+# 运行：cloudwater train --config configs/experiments/mlp_nonneg.yaml
+extends: [../data.yaml, ../training.yaml]
+
+experiment:
+  name: mlp_nonneg
+  description: MLP + softplus 输出头（云水含量非负硬约束）
+  output_name: null
+
+model:
+  name: mlp
+  params:
+    hidden_layers: [128, 64]
+    activation: relu
+    dropout: 0.1
+    output_activation: softplus   # 关键：输出恒 > 0
+
+split:
+  strategy: time
+  ratios: [0.7, 0.15, 0.15]
+  params:
+    train_end: "2017-12-31T23:59:59"
+    val_end: "2018-12-31T23:59:59"
+  seed: 42
+
+mix:
+  real_fraction: null
+
+physics:
+  constraints: []

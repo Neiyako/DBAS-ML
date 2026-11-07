@@ -144,7 +144,7 @@ CLI (cloudwater): doctor | gpu info|benchmark | models list | data validate |
 
 ```
 $ python -m pytest -q
-293 passed, 6 skipped        # 退出码 0
+300 passed, 6 skipped        # 退出码 0
 ```
 
 - **skipped 全是环境依赖**：CUDA 专属用例（本机无卡）、xgboost 未安装；
@@ -164,9 +164,9 @@ $ python -m pytest -q
 |---|---|---|---|
 | 1 | **CUDA 实跑数字缺失** | 无法证明 5060 上的真实吞吐/显存 | 在 GPU 机器上跑 §4.2 清单 |
 | 2 | **真实 ERA5 未接入** | 科研结论（反演精度）不能给出 | 接入真实数据后跑 A~E 配比与跨域实验 |
-| 3 | 训练侧**尚未流式** | TB 级数据需先降采样到内存 | 下一步接 `IterableDataset` + `iter_batches` |
-| 4 | `physics_report` 在合成数据上判 **FAIL**（负 clwc/ciwc 各 1~4 个，量级 1e-6） | 属**真实检出**：回归输出未约束非负 | 启用 `nonnegativity` 软约束或 `nonnegativity_softplus` 硬约束 |
-| 5 | `region` 分组泛化恒 skipped（无 `region_boxes`） | 拿不到分区域结论 | 在配置里补 `evaluation.region_boxes` |
+| 3 | ~~训练侧尚未流式~~ | **已解决**：`data/stream.py` + `Trainer.fit_stream` + `MLP.fit_stream`，真实 NetCDF 端到端训练通过 | — |
+| 4 | ~~physics_report 判 FAIL（负 clwc/ciwc）~~ | **已解决**：新增 `MLP(output_activation=softplus)` 硬约束（`configs/experiments/mlp_nonneg.yaml`），`negative_values` 由 FAIL→PASS；代价 R² 0.976→0.744（显式取舍） | — |
+| 5 | ~~region 分组恒 skipped~~ | **已解决**：`configs/training.yaml` 增加 `evaluation.region_boxes`，区域指标已产出 | — |
 | 6 | `docs/data_schema.md` / `docs/experiment_protocol.md` / `docs/model_design.md` 仍是 v1.0 文本 | 与 v2.0 细节有出入 | 建议下轮统一重写（本轮已新增 7 篇 v2.0 文档） |
 | 7 | mypy 仅配置基线，未做全量类型收敛 | 类型错误可能漏过 | 下轮分批 `mypy src` 收敛 |
 | 8 | 缓存不跨机器迁移 | 换机需重建（只影响速度） | 可接受，文档已说明 |
@@ -194,10 +194,10 @@ $ python -m pytest -q
 
 | 优先级 | 任务 | 理由 |
 |---|---|---|
-| P0 | 训练侧 `IterableDataset` 流式接入 | 打通 TB 级数据的最后一段 |
+| ~~P0~~ | ~~训练侧 IterableDataset 流式接入~~ | **本轮已完成**（`data/stream.py`、`Trainer.fit_stream`、7 个真实 NetCDF 测试） |
 | P0 | 在 RTX 5060 机器完成 §4.2 验收 | 补齐 GPU 实测数字 |
-| P1 | `evaluation.region_boxes` + 区域泛化测试 | 让分组泛化真正产出结论 |
-| P1 | 非负硬约束接入默认配置（科学合理性） | 当前物理报告 FAIL 的直接原因 |
+| ~~P1~~ | ~~`evaluation.region_boxes`~~ | **本轮已完成**（配置已补，区域指标已产出） |
+| ~~P1~~ | ~~非负硬约束~~ | **本轮已完成**（softplus 输出头 + 持久化 + 3 个测试） |
 | P2 | mypy 全量收敛 + pre-commit 钩子 | 防类型回归 |
 | P2 | 重写 v1.0 遗留三篇文档 | 文档一致性 |
 | P3 | 深度集成（Deep Ensemble）训练编排 | 不确定性方法从 1 种扩到 3 种 |

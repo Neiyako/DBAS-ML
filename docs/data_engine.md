@@ -170,10 +170,31 @@ sub, info = sampler.sample(real_fraction=0.75, strategy="ratio")
 
 ---
 
-## 7. 已知限制
+## 7. 流式训练（端到端）
 
-- **训练侧尚未接流式**：`Trainer.fit` 收的是 numpy 矩阵；数据层的 `iter_batches`
-  已可用，但训练循环的 `IterableDataset` 接入是下一步（当前 TB 级数据需先降采样到
-  内存可容纳的规模）。
-- 无 dask 时 `chunks` 不生效（会告警），实际读取走 netCDF4 的索引切片。
+```python
+from cloudwater_ml.data.stream import NetCDFStreamDataset
+from cloudwater_ml.models.mlp import MLP
+
+ds = NetCDFStreamDataset(cfg, batch_samples=100_000)      # 不整载数据
+model = MLP(hidden_layers=[128, 64])
+result = model.fit_stream(ds, n_features=6, n_targets=2, config=cfg)
+```
+
+链路：`NetCDF → iter_batches(batch_samples) → NetCDFStreamDataset → Trainer.fit_stream`。
+
+- **不要求整份数据在内存里**；每批样本数受 `batch_samples` 约束；
+- **与内存模式共用同一训练核心**（`Trainer._fit_core`）：AMP、梯度累积、梯度裁剪、
+  检查点、早停、显存统计完全一致，不会出现「流式训练少了某个特性」；
+- **多 worker 分片**：`shard_by="time"`（默认）把 `netcdf.time_range` 均分给各 worker，
+  **I/O 不重复**；没有 `time_range` 时退化为按批序号取模并**显式告警** I/O 放大；
+- 可选 `shuffle_buffer`（默认 0 = 顺序读取，I/O 友好）。
+
+> 限制：流式模式目前不产出分组泛化与质量报告（需要全量统计）；
+> 需要这些时请用内存模式或先跑一次 `cloudwater data validate`。
+
+## 8. 已知限制
+
+- 流式训练需要 `training/streaming` 由调用方显式启用（默认仍是内存模式，避免小数据多绕一层）；
+- 无 dask 时 `chunks` 不生效（会告警），实际读取走 netCDF4 的索引切片；
 - 缓存不跨机器迁移（可重建，只影响速度）。

@@ -466,3 +466,52 @@ def test_unet_cuda_training(rng):
     result = model.fit(X, Y, config=_cfg(epochs=4, device="cuda", batch_size=4))
     _assert_loss_decreased(result)
     assert model.predict_field(X).shape == (16, 1, 16, 16)
+
+
+# ----------------------------------------------------------------------
+# MLP 输出激活：云水含量非负硬约束
+# ----------------------------------------------------------------------
+def test_mlp_softplus_output_is_non_negative(rng):
+    """softplus 输出头 ⇒ 预测恒 > 0（训练与推理一致，物理非负硬约束）。"""
+    import numpy as np
+
+    from cloudwater_ml.models.mlp import MLP
+
+    X = rng.normal(size=(64, 4)).astype(np.float32)
+    Y = np.abs(X[:, :2]) * 0.01
+    model = MLP(hidden_layers=[16], dropout=0.0, output_activation="softplus")
+    model.fit(X, Y, config=_cfg(epochs=3, batch_size=16))
+    pred = model.predict(X)
+    assert pred.shape == (64, 2)
+    assert np.all(pred > 0), "softplus 输出出现非正值"
+
+
+def test_mlp_linear_output_can_be_negative(rng):
+    """对照组：默认线性输出头**不保证**非负（所以需要显式开软/硬约束）。"""
+    import numpy as np
+
+    from cloudwater_ml.models.mlp import MLP
+
+    X = rng.normal(size=(64, 4)).astype(np.float32)
+    Y = X[:, :2]  # 有负值的目标
+    model = MLP(hidden_layers=[16], dropout=0.0)  # 默认 linear
+    model.fit(X, Y, config=_cfg(epochs=3, batch_size=16))
+    assert np.any(model.predict(X) < 0)
+
+
+def test_mlp_output_activation_roundtrip(tmp_path, rng):
+    """output_activation 必须随模型持久化（否则加载后约束丢失）。"""
+    import numpy as np
+
+    from cloudwater_ml.models.base import load_model
+    from cloudwater_ml.models.mlp import MLP
+
+    X = rng.normal(size=(32, 3)).astype(np.float32)
+    Y = np.abs(X[:, :1]) * 0.01
+    model = MLP(hidden_layers=[8], dropout=0.0, output_activation="softplus")
+    model.fit(X, Y, config=_cfg(epochs=2, batch_size=16))
+    model.save(tmp_path / "m")
+    loaded = load_model(tmp_path / "m")
+    assert loaded.params.get("output_activation") == "softplus"
+    pred = loaded.predict(X)
+    assert np.all(pred > 0), "加载后非负约束丢失"

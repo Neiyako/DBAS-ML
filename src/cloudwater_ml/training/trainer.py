@@ -109,12 +109,8 @@ class Trainer:
         out_dir: str | Path | None = None,
     ) -> Any:
         """训练并返回 ``TrainingResult``（history 每 epoch 一行）。"""
-        from ..models.base import TrainingResult  # 延迟导入避免包循环依赖
-
         cfg = self.cfg
         set_seed(int(cfg.get("seed", 42)), deterministic=bool(cfg.get("deterministic", False)))
-
-        epochs = int(cfg.get("epochs", 100))
         batch_size = int(cfg.get("batch_size", 256))
 
         # -- 运行时计划（设备 / 精度 / DataLoader / 累积） --------------
@@ -150,6 +146,32 @@ class Trainer:
                 X_val, Y_val, batch_size, plan, shuffle=False
             )
 
+        return self._fit_core(
+            plan=plan,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            out_dir=out_dir,
+        )
+
+    def _fit_core(
+        self,
+        *,
+        plan: RuntimePlan,
+        train_loader: Any,
+        val_loader: Any | None,
+        out_dir: str | Path | None,
+    ) -> Any:
+        """训练核心（内存模式与流式模式共用）。
+
+        调用方负责：设备计划、DataLoader 构造、随机种子。
+        本方法负责：损失/约束、优化器/调度、AMP、梯度累积、检查点、
+        早停、显存统计与结果汇总 —— 两条数据路径**共享同一实现**，
+        避免出现「流式训练没有 AMP/累积」这类不一致。
+        """
+        from ..models.base import TrainingResult  # 延迟导入避免包循环依赖
+
+        cfg = self.cfg
+        epochs = int(cfg.get("epochs", 100))
         # -- 损失 / 约束 / 优化 / 调度 ------------------------------------
         supervised = get_loss(str(cfg.get("loss", "mse")), cfg)
         constraints = build_constraints(cfg.get("physics"))
@@ -348,6 +370,95 @@ class Trainer:
                 "n_batches_last_epoch": n_batches,
             },
         )
+
+    def fit_stream(
+        self,
+        source: Any,
+        *,
+        n_features: int,
+        n_targets: int,
+        n_samples_hint: int | None = None,
+        out_dir: str | Path | None = None,
+    ) -> Any:
+        """**流式训练**：直接消费分批产出的数据源，不要求整份数据在内存里。
+
+        Parameters
+        ----------
+        source : Iterable 或 DataLoader
+            每个元素是 ``(x, y)`` 张量元组（``x [B,F]``、``y [B,T]``）。
+            通常传 ``data.stream.NetCDFStreamDataset``。
+        n_features / n_targets : int
+            用于推导运行时计划（模型结构由调用方自行构造）。
+        n_samples_hint : int | None
+            预估总样本数（仅用于 `num_workers` 自动推断，可为 None）。
+        out_dir : 检查点目录。
+
+        与 :meth:`fit` 的区别只有「数据怎么来」；训练循环、AMP、梯度累积、
+        检查点、早停、显存统计**完全共用** :meth:`_fit_core`。
+        """
+        from torch.utils.data import DataLoader as _DL
+
+        set_seed(int(self.cfg.get("seed", 42)), deterministic=bool(self.cfg.get("deterministic", False)))
+
+        plan = self._build_plan_shape(
+            n_features=n_features,
+            n_targets=n_targets,
+            batch_size=int(self.cfg.get("batch_size", 256)),
+            n_samples=n_samples_hint,
+        )
+        self.plan = plan
+        self.device = plan.device
+        self.logger.info(
+            "流式训练计划: device=%s precision=%s accum=%d workers=%d",
+            plan.device,
+            plan.precision.mode,
+            plan.gradient_accumulation_steps,
+            plan.dataloader.num_workers,
+        )
+
+        # batch_size=None：数据源自己产出「一批」，DataLoader 不再切分
+        kwargs = plan.dataloader.loader_kwargs()
+        kwargs.pop("shuffle", None)
+        kwargs.pop("drop_last", None)
+        loader = (
+            source
+            if isinstance(source, _DL)
+            else _DL(source, batch_size=None, **{k: v for k, v in kwargs.items() if k != "pin_memory"})
+        )
+        return self._fit_core(plan=plan, train_loader=loader, val_loader=None, out_dir=out_dir)
+
+    def _build_plan_shape(
+        self,
+        *,
+        n_features: int,
+        n_targets: int,
+        batch_size: int,
+        n_samples: int | None,
+    ) -> RuntimePlan:
+        """按张量形状（而非具体数组）解析运行时计划，供流式路径使用。"""
+        cfg_for_plan = dict(self.full_config) if self.full_config else {}
+        if not cfg_for_plan:
+            cfg_for_plan = {"training": dict(self.cfg)}
+        else:
+            cfg_for_plan["training"] = {**dict(self.cfg), **dict(cfg_for_plan.get("training") or {})}
+        if self.cfg.get("physics") and "physics" not in cfg_for_plan:
+            cfg_for_plan["physics"] = self.cfg["physics"]
+        if self._explicit_device:
+            cfg_for_plan.setdefault("hardware", {})
+            cfg_for_plan["hardware"] = {
+                **dict(cfg_for_plan.get("hardware") or {}),
+                "device": self._explicit_device,
+            }
+        plan = resolve_runtime(
+            cfg_for_plan,
+            model_name=self.model_name or type(self.model).__name__.lower(),
+            supports_channels_last=getattr(self.model, "supports_channels_last", None),
+            n_samples=n_samples,
+        )
+        plan.batch_size = int(batch_size)
+        plan.n_features = int(n_features)  # type: ignore[attr-defined]
+        plan.n_targets = int(n_targets)    # type: ignore[attr-defined]
+        return plan
 
     # ------------------------------------------------------------------
     # 内部工具
